@@ -9,12 +9,12 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-Explain how your project works
+This is an example VGA project. It has changes followed through workshop materials
 
 ## How to test
 
-Explain how to use your project
+Connect VGA, it will display a moving color strips on VGA
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+It reqiires VGA connector to connect to monitor.
