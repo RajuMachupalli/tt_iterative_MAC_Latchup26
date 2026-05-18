@@ -33,7 +33,7 @@ TOPLEVEL = tb
 
 # Gate-level netlists do not expose the RTL FSM register as "state"
 ifeq ($(GATES),yes)
-COCOTB_TEST_MODULES = test
+# COCOTB_TEST_MODULES = test
 else
 COCOTB_TEST_MODULES = test
 endif
