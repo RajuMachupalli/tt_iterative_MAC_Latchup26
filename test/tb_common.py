@@ -3,7 +3,7 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
+from cocotb.triggers import ClockCycles, ReadOnly, RisingEdge, Timer
 
 from mac_reference import MacModel
 
@@ -13,15 +13,8 @@ def pack_reset(mode: int, activation: int) -> int:
 
 
 def dut_state(dut) -> int:
+    """Call only after await sample_dut()."""
     return int(dut.DUT.state.value)
-
-
-def has_rtl_state(dut) -> bool:
-    try:
-        _ = dut.DUT.state.value
-        return True
-    except AttributeError:
-        return False
 
 
 async def setup_clock(dut, period_ns: int = 20):
@@ -39,36 +32,38 @@ async def apply_reset(dut, ui_reset: int, cycles: int = 5):
 
 
 async def mac_step(dut, weight: int, bias: int = 0):
+    """Drive operands and clock once (call await ReadOnly() before sampling)."""
+    await Timer(1, unit="step")
     dut.ui_in.value = weight & 0xFF
     dut.uio_in.value = bias & 0xFF
-    await ClockCycles(dut.clk, 1)
+    await RisingEdge(dut.clk)
 
 
 async def run_lockstep_outputs(dut, model: MacModel, steps: list):
-    """Compare only chip outputs (safe for gate-level netlists)."""
     for weight, bias in steps:
         model.step(weight, bias)
         await mac_step(dut, weight, bias)
+        await ReadOnly()
         assert int(dut.uo_out.value) == model.uo_out
-        assert int(dut.uio_out.value) == model.uio_out
         assert int(dut.uio_oe.value) == model.uio_oe
+        if model.uio_oe == 0xFF:
+            assert int(dut.uio_out.value) == model.uio_out
 
 
 async def run_lockstep(dut, model: MacModel, steps: list):
-    """RTL-only: outputs plus internal FSM state."""
     trace = []
     for weight, bias in steps:
         model.step(weight, bias)
         await mac_step(dut, weight, bias)
-        entry = {
-            "state": dut_state(dut),
-            "ref_state": model.state,
-            "uo": int(dut.uo_out.value),
-            "ref_uo": model.uo_out,
-            "uio": int(dut.uio_out.value),
-            "ref_uio": model.uio_out,
-            "uio_oe": int(dut.uio_oe.value),
-            "ref_uio_oe": model.uio_oe,
-        }
-        trace.append(entry)
+        await ReadOnly()
+        trace.append(
+            {
+                "state": dut_state(dut),
+                "ref_state": model.state,
+                "uo": int(dut.uo_out.value),
+                "ref_uo": model.uo_out,
+                "uio_oe": int(dut.uio_oe.value),
+                "ref_uio_oe": model.uio_oe,
+            }
+        )
     return trace

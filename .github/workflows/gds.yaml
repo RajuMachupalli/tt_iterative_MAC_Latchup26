@@ -86,17 +86,7 @@ jobs:
           make clean
           GATES=yes make
           test -f results.xml
-          python3 - <<'PY'
-          import sys
-          import xml.etree.ElementTree as ET
-          root = ET.parse("results.xml").getroot()
-          suite = root if root.tag == "testsuite" else root.find("testsuite")
-          if suite is None:
-              sys.exit("results.xml: no testsuite element")
-          failed = int(suite.attrib.get("failures", 0)) + int(suite.attrib.get("errors", 0))
-          if failed:
-              sys.exit(f"JUnit reports {failed} failure(s)/error(s)")
-          PY
+          python3 -m cocotb_tools.check_results results.xml
 
       - name: Upload gate-level test results
         if: always()
