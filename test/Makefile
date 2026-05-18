@@ -4,6 +4,7 @@
 SIM ?= icarus
 FST ?= -fst
 TOPLEVEL_LANG ?= verilog
+export PYTHONPATH := $(PWD):$(PYTHONPATH)
 SRC_DIR = $(PWD)/../src
 PROJECT_SOURCES = tt_um_rajum_iterativeMAC.v adder.v multi.v
 

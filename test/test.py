@@ -108,10 +108,11 @@ async def test_training_early_exit_from_s2(dut):
     model.reset(pack_reset(1, 32))
 
     await apply_reset(dut, pack_reset(1, 32))
+    # Reach S2 with small weights (64 at S1 would trigger early-exit to S5)
     model.step(1, 0)
-    model.step(64, 0)
+    model.step(2, 0)
     await mac_step(dut, 1, 0)
-    await mac_step(dut, 64, 0)
+    await mac_step(dut, 2, 0)
     assert dut_state(dut) == 2
 
     trace = await run_lockstep(dut, model, [(64, 0xAA), (64, 0xBB), (1, 0)])
@@ -125,7 +126,7 @@ async def test_training_early_exit_from_s3(dut):
     model.reset(pack_reset(1, 32))
 
     await apply_reset(dut, pack_reset(1, 32))
-    for w, b in [(1, 0), (2, 0), (64, 0)]:
+    for w, b in [(1, 0), (2, 0), (3, 0)]:
         model.step(w, b)
         await mac_step(dut, w, b)
     assert dut_state(dut) == 3
