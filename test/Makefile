@@ -29,6 +29,12 @@ endif
 COMPILE_ARGS 		+= -I$(SRC_DIR)
 VERILOG_SOURCES += $(PWD)/tb.v
 TOPLEVEL = tb
+
+# Gate-level netlists do not expose the RTL FSM register as "state"
+ifeq ($(GATES),yes)
+COCOTB_TEST_MODULES = test_gl
+else
 COCOTB_TEST_MODULES = test
+endif
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

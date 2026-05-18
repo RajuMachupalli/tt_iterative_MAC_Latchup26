@@ -1,61 +1,18 @@
 # SPDX-FileCopyrightText: © 2024 Tiny Tapeout
 # SPDX-License-Identifier: Apache-2.0
+"""RTL cocotb tests (includes internal FSM state checks)."""
 
 import cocotb
-from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
 
 from mac_reference import MacModel, out_th
-
-
-def pack_reset(mode: int, activation: int) -> int:
-    return ((mode & 1) << 7) | (activation & 0x7F)
-
-
-def dut_state(dut) -> int:
-    return int(dut.DUT.state.value)
-
-
-async def setup_clock(dut, period_ns: int = 20):
-    clock = Clock(dut.clk, period_ns, unit="ns")
-    cocotb.start_soon(clock.start())
-
-
-async def apply_reset(dut, ui_reset: int, cycles: int = 5):
-    dut.ena.value = 1
-    dut.ui_in.value = ui_reset
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, cycles)
-    dut.rst_n.value = 1
-
-
-async def mac_step(dut, weight: int, bias: int = 0):
-    dut.ui_in.value = weight & 0xFF
-    dut.uio_in.value = bias & 0xFF
-    await ClockCycles(dut.clk, 1)
-
-
-async def run_lockstep(dut, model: MacModel, steps: list[tuple[int, int]]):
-    """Run RTL and reference in parallel; return list of (rtl_state, ref_state) per step."""
-    trace = []
-    for weight, bias in steps:
-        model.step(weight, bias)
-        await mac_step(dut, weight, bias)
-        rtl_s = dut_state(dut)
-        trace.append(
-            {
-                "state": rtl_s,
-                "ref_state": model.state,
-                "uo": int(dut.uo_out.value),
-                "ref_uo": model.uo_out,
-                "uio": int(dut.uio_out.value),
-                "ref_uio": model.uio_out,
-                "uio_oe": int(dut.uio_oe.value),
-                "ref_uio_oe": model.uio_oe,
-            }
-        )
-    return trace
+from tb_common import (
+    apply_reset,
+    dut_state,
+    mac_step,
+    pack_reset,
+    run_lockstep,
+    setup_clock,
+)
 
 
 def assert_states(trace, expected_states: list[int], msg: str):
@@ -95,13 +52,11 @@ async def test_inference_stays_in_state_1(dut):
 
 @cocotb.test()
 async def test_training_full_cycle_no_threshold(dut):
-    """Training must visit S1->S2->S3->S4->S1 when product[14:11]==0."""
     await setup_clock(dut)
     model = MacModel()
     model.reset(pack_reset(1, 3))
 
     await apply_reset(dut, pack_reset(1, 3))
-    # weights 1..4 keep 3*weight < 2048
     steps = [(1, 0x10), (2, 0x20), (3, 0x30), (4, 0x40), (5, 0x50)]
     trace = await run_lockstep(dut, model, steps)
 
@@ -114,7 +69,6 @@ async def test_training_full_cycle_no_threshold(dut):
 
 @cocotb.test()
 async def test_training_second_full_cycle(dut):
-    """Two complete S1->S2->S3->S4->S1 loops after initial S0 capture."""
     await setup_clock(dut)
     model = MacModel()
     model.reset(pack_reset(1, 4))
@@ -129,15 +83,13 @@ async def test_training_second_full_cycle(dut):
 
 @cocotb.test()
 async def test_training_early_exit_from_s1(dut):
-    """out_th at S1: S1 -> S5 -> S6 -> S7 -> S1 (skip S2-S4)."""
     await setup_clock(dut)
-    # 32 * 64 = 2048 -> bit 11 set
     model = MacModel()
     model.reset(pack_reset(1, 32))
 
     await apply_reset(dut, pack_reset(1, 32))
     model.step(0, 0)
-    await mac_step(dut, 0, 0)  # S0
+    await mac_step(dut, 0, 0)
 
     weight = 64
     assert out_th(model.mult(weight))
@@ -151,7 +103,6 @@ async def test_training_early_exit_from_s1(dut):
 
 @cocotb.test()
 async def test_training_early_exit_from_s2(dut):
-    """out_th at S2: S2 -> S6 -> S7 -> S1."""
     await setup_clock(dut)
     model = MacModel()
     model.reset(pack_reset(1, 32))
@@ -169,7 +120,6 @@ async def test_training_early_exit_from_s2(dut):
 
 @cocotb.test()
 async def test_training_early_exit_from_s3(dut):
-    """out_th at S3: S3 -> S7 -> S1."""
     await setup_clock(dut)
     model = MacModel()
     model.reset(pack_reset(1, 32))
@@ -191,7 +141,7 @@ async def test_capture_state0_product(dut):
     model.reset(pack_reset(0, 7))
 
     await apply_reset(dut, pack_reset(0, 7))
-    await mac_step(dut, 3, 0)  # S0: 7*3=21 -> result[31:16]
+    await mac_step(dut, 3, 0)
 
     assert dut_state(dut) == 1
     model.step(3, 0)
@@ -201,7 +151,6 @@ async def test_capture_state0_product(dut):
 
 @cocotb.test()
 async def test_regression_training_smoke(dut):
-    """tt07 vectors: mode=1, activation=11; five cycles complete S0..S4 finalize."""
     await setup_clock(dut)
     model = MacModel()
     model.reset(139)
@@ -219,7 +168,6 @@ async def test_regression_training_smoke(dut):
 
 @cocotb.test()
 async def test_lockstep_random_training(dut):
-    """Random small operands: RTL must match reference for 3 full training rounds."""
     await setup_clock(dut)
     model = MacModel()
     model.reset(pack_reset(1, 5))

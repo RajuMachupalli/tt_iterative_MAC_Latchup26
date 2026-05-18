@@ -16,13 +16,17 @@ To run the RTL simulation:
 make -B
 ```
 
-To run gatelevel simulation, first harden your project and copy `../runs/wokwi/results/final/verilog/gl/{your_module_name}.v` to `gate_level_netlist.v`.
+To run gatelevel simulation, first harden your project and copy the gate-level Verilog
+to `gate_level_netlist.v` (the GDS action does this automatically in CI).
 
 Then run:
 
 ```sh
 make -B GATES=yes
 ```
+
+Gate-level simulation runs `test_gl.py` (output-only checks). RTL simulation runs
+`test.py` (full FSM state coverage).
 
 If you wish to save the waveform in VCD format instead of FST format, edit tb.v to use `$dumpfile("tb.vcd");` and then run:
 
