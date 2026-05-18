@@ -1,42 +1,31 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
-# Tiny Tapeout Verilog Project Template
+# Iterative MAC — Tiny Tapeout (LatchUp 2026)
 
-- [Read the documentation for project](docs/info.md)
+32-bit **multiply-accumulate** block with a **7×8-bit** multiplier, ported from [tt07_iterativeMAC](https://github.com/RajuMachupalli/tt07_iterativeMAC) for the LatchUp 2026 shuttle.
 
-## What is Tiny Tapeout?
+- [Project datasheet](docs/info.md)
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+## Overview
 
-To learn more and get started, visit https://tinytapeout.com.
+| Block | Description |
+|-------|-------------|
+| `multi` | 7×8 → 15-bit product (`inp_a` × weight byte) |
+| `adder` | 32-bit accumulator |
+| FSM | Inference (steady accumulate) or training (4-phase bias alignment) |
 
-## Set up your Verilog project
+**Inference:** latch activation on reset, then present one weight byte per clock; read MSBs on `uo_out` / `uio_out`.
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+**Training:** set `ui_in[7]=1`; supply bias bytes on `uio_in` across the FSM phases.
 
-The GitHub action will automatically build the ASIC files using [LibreLane](https://www.zerotoasiccourse.com/terminology/librelane/).
+## Setup
 
-## Enable GitHub actions to build the results page
-
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+1. RTL lives in `src/` — top module `tt_um_rajum_iterativeMAC`.
+2. Metadata in [info.yaml](info.yaml).
+3. Run cocotb tests from `test/` — see [test/README.md](test/README.md).
 
 ## Resources
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
-
-## What next?
-
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
-  - Bluesky [@tinytapeout.com](https://bsky.app/profile/tinytapeout.com)
+- [Tiny Tapeout](https://tinytapeout.com)
+- [Original MAC repo](https://github.com/RajuMachupalli/tt07_iterativeMAC)
+- [Local hardening guide](https://www.tinytapeout.com/guides/local-hardening/)
