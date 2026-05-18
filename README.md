@@ -16,7 +16,9 @@
 
 **Inference:** latch activation on reset, then present one weight byte per clock; read MSBs on `uo_out` / `uio_out`.
 
-**Training:** set `ui_in[7]=1`; supply bias bytes on `uio_in` across the FSM phases.
+**Training:** set `ui_in[7]=1`; supply bias bytes on `uio_in` across four phases (S1–S4). Large products (`|product[14:11]`) take a shortened S5–S7 path. See [docs/info.md](docs/info.md) for the state diagram.
+
+**Simulation:** `test/mac_reference.py` is a cycle-accurate golden model checked by cocotb against `DUT.state` and outputs.
 
 ## Setup
 

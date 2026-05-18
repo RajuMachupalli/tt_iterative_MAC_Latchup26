@@ -4,12 +4,17 @@
  *
  * 32-bit iterative MAC with a 7x8-bit multiplier for ML inference/training.
  *
- * ui_in[6:0]  - activation (latched on reset)
- * ui_in[7]    - mode: 0 = inference (accumulate each cycle), 1 = training (4-byte bias walk)
- * ui_in[7:0]  - weight byte (per cycle, operand B of multiplier)
- * uio_in[7:0] - bias byte (training) or unused (inference outputs on uio)
- * uo_out      - result[31:24]
- * uio_out     - result[23:16] (outputs when mode=0)
+ * ui_in[6:0]  - activation (latched while rst_n is low)
+ * ui_in[7]    - mode: 0 = inference, 1 = training
+ * ui_in[7:0]  - weight byte (operand B) each active cycle
+ * uio_in[7:0] - bias byte (training); uio outputs result[23:16] in inference
+ *
+ * Training FSM (out_th = |product[14:11]):
+ *   S0 capture product -> S1 -> S2 -> S3 -> S4 finalize -> S1
+ *   Early exit: S1 -/out_th-> S5 -> S6 -> S7 finalize -> S1
+ *               S2 -/out_th-> S6 -> S7 finalize -> S1
+ *               S3 -/out_th-> S7 finalize -> S1
+ * Inference: S0 -> S1 (hold; accumulate + shift every cycle)
  */
 
 `default_nettype none
@@ -47,13 +52,11 @@ module tt_um_rajum_iterativeMAC (
       .c(temp_c)
   );
 
-  assign out_th = |mult_out[14:11];
-
-  // Inference: drive uio as output; training: uio is input for bias bytes
-  assign uio_oe  = mode ? 8'b0000_0000 : 8'b1111_1111;
-  assign uio_out = mode ? 8'b0000_0000 : result[23:16];
-  assign uo_out  = result[31:24];
-  assign temp_a  = sum;
+  assign out_th   = |mult_out[14:11];
+  assign uio_oe   = mode ? 8'b0000_0000 : 8'b1111_1111;
+  assign uio_out  = mode ? 8'b0000_0000 : result[23:16];
+  assign uo_out   = result[31:24];
+  assign temp_a   = sum;
 
   always @(posedge clk) begin
     if (!rst_n) begin
@@ -64,10 +67,13 @@ module tt_um_rajum_iterativeMAC (
       state  <= 3'd0;
     end else begin
       case (state)
+        // Capture first product into result[31:16]
         3'd0: begin
           result[31:16] <= mult_out;
           state         <= 3'd1;
         end
+
+        // Accumulate + shift (inference holds here)
         3'd1: begin
           sum    <= temp_c;
           result <= result << 8;
@@ -78,46 +84,60 @@ module tt_um_rajum_iterativeMAC (
           else
             state <= 3'd2;
         end
+
         3'd2: begin
           sum    <= temp_c;
           result <= result << 8;
-          if (out_th)
+          if (mode && out_th)
             state <= 3'd6;
-          else
+          else if (mode)
             state <= 3'd3;
+          else
+            state <= 3'd1;
         end
+
         3'd3: begin
           sum    <= temp_c;
           result <= result << 8;
-          if (out_th)
+          if (mode && out_th)
             state <= 3'd7;
-          else
+          else if (mode)
             state <= 3'd4;
+          else
+            state <= 3'd1;
         end
+
+        // Normal training finalize (full 4 bias phases)
         3'd4: begin
           sum    <= 32'd0;
           result <= temp_c;
           state  <= 3'd1;
         end
+
+        // Early-exit path (same temp_b alignment as states 2,3,4)
         3'd5: begin
           sum    <= temp_c;
           result <= result << 8;
           state  <= 3'd6;
         end
+
         3'd6: begin
           sum    <= temp_c;
           result <= result << 8;
           state  <= 3'd7;
         end
+
         3'd7: begin
           sum    <= 32'd0;
           result <= temp_c;
           state  <= 3'd1;
         end
+
         default: begin
-          state  <= state + 3'd1;
+          // Legacy catch-all (3'd5/3'd6 were handled here in tt07)
           sum    <= temp_c;
           result <= result << 8;
+          state  <= state + 3'd1;
         end
       endcase
     end
